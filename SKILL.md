@@ -61,8 +61,9 @@ Always ask, even when context suggests an obvious answer:
 3. **Template** — a Confluence page ID OR a Confluence template inside a
    space. The structure (heading tree) AND any example content under each
    heading are both inputs to the mapper.
-4. **Destination** — either a new page (`parent page ID` + `title`) or an
-   existing page to update. Always confirm the destination space.
+4. **Destination** — either a new page (just the `parent page ID`; the title
+   is inferred in Step 10, not asked here) or an existing page to update.
+   Always confirm the destination space.
 5. **Doc kind** — `technical` or `functional`. Used as a label in Step 11.
 6. **Feature name** — short human name of the feature being documented.
    Used as a label in Step 11 (slugified: lower-case, spaces → `-`,
@@ -219,7 +220,31 @@ See [reference.md](reference.md) for a full worked example.
 
 ## Step 10 — Publish
 
-- New page → `createConfluencePage` under the chosen parent.
+**Title inference (new pages only).** Build the destination title from the
+template title captured in Step 4 and the feature name captured in Step 1.6:
+
+```
+destination_title = "<feature name> - <template title>"
+```
+
+Use the operator's original casing for the feature name (not the slug from
+Step 11). Before substituting, strip any placeholder marker that wraps the
+template title — `[…]`, `<…>`, `{{…}}`, leading/trailing literal "Template"
+or "Modèle" — so the result reads cleanly. Examples:
+
+- template `Architecture Decision Record [Template]` + feature
+  `Auth token refresh` → `Auth token refresh - Architecture Decision Record`
+- template `{{Service runbook}}` + feature `Billing webhook` →
+  `Billing webhook - Service runbook`
+
+Always show the inferred title back to the operator and let them confirm or
+override before calling the publish tool.
+
+For an **existing page** being updated, leave the title untouched unless the
+operator explicitly asks to rename it.
+
+- New page → `createConfluencePage` under the chosen parent with the
+  confirmed title.
 - Existing page → `updateConfluencePage`.
 
 Print the resulting page URL back to the operator before exiting.

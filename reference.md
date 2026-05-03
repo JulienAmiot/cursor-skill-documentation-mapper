@@ -45,8 +45,9 @@ Step 1 can be driven by five AskQuestion blocks:
    - A whole space (warn the operator about volume)
 
 3. "Where should the new document land?"
-   - New page under <parent page ID>
-   - Update existing page <page ID>
+   - New page under <parent page ID>  (title will be inferred in Step 10
+     from "<feature name> - <template title>" and confirmed before publish)
+   - Update existing page <page ID>   (title left untouched)
 
 4. "Is this a technical or functional document?"
    - technical
@@ -58,6 +59,19 @@ Step 1 can be driven by five AskQuestion blocks:
 ```
 
 Always echo the operator's choices back before running anything destructive.
+
+### Title inference rule (Step 10)
+
+```
+destination_title = "<feature name> - <template title>"
+```
+
+- Use the operator's original casing for `<feature name>`, NOT the slug.
+- Strip placeholder wrappers from the template title before composing:
+  `[…]`, `<…>`, `{{…}}`, leading/trailing `Template` or `Modèle`.
+- Always confirm the inferred title with the operator before publishing.
+- Existing-page updates: title is left unchanged unless the operator
+  explicitly asks to rename.
 
 ## Confluence storage-format notes
 
