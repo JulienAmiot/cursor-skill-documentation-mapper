@@ -9,14 +9,19 @@ description: >-
   dedicated "Discrepancies" section, and ends with a coverage footnote that
   quantifies BOTH missing% (empty target sections / total target sections) AND
   excess% (source characters that did not make it into the final doc, per topic
-  and overall). Use when the user asks to map, migrate, consolidate, transcribe
-  or rewrite documentation into a Confluence template, mentions
+  and overall). Two modes are offered upfront: SINGLE produces one document
+  from one template; SET produces several complementary documents from N
+  templates against the same source, then publishes an overview/coverage page
+  that cross-references the drafts and reports aggregate union coverage and
+  inter-draft redundancy. Use when the user asks to map, migrate, consolidate,
+  transcribe or rewrite documentation into a Confluence template, mentions
   "documentation mapper", "doc mapping", "fill a Confluence template from
-  existing docs", or wants a Confluence-to-Confluence proof of concept of
-  template-driven documentation. When the destination supports
-  labels/tags/metadata, also tags the published page with the feature name,
-  either "technical" or "functional" (the kind of doc the operator asked
-  for), and "cursor".
+  existing docs", "documentation set", "document a feature end to end", or
+  wants a Confluence-to-Confluence proof of concept of template-driven
+  documentation. When the destination supports labels/tags/metadata, also tags
+  every published page with the feature name, the per-template kind label
+  ("technical", "functional", or "overview" for the SET-mode index page), and
+  "cursor".
 ---
 
 # Documentation Mapper
@@ -28,28 +33,73 @@ the template), and tags the destination so it can be found again.
 
 The default proof of concept is **Confluence → Confluence**.
 
+The skill runs in one of two modes, picked upfront in Step 0:
+
+- **`single`** (default) — one source set, one template, one published doc.
+  Steps 1 → 11 below.
+- **`set`** — one source set, N templates, N published docs PLUS an
+  overview/coverage page that cross-references them, reports aggregate union
+  coverage, and quantifies inter-draft redundancy. Steps 1 → 12 below;
+  Steps 3, 5–11 run once per template.
+
 ## Workflow
 
 Copy this checklist and update it as you go:
 
 ```
+- [ ] Step 0: Choose run mode (single or set)
 - [ ] Step 1: Gather operator inputs
 - [ ] Step 2: Discover the Atlassian MCP server in the current project
-- [ ] Step 3: Fetch and split the source(s) into blocks
-- [ ] Step 4: Fetch and parse the target template structure
-- [ ] Step 5: Map each source block to a target section
+- [ ] Step 3: Fetch and split the source(s) into blocks      (shared in set mode)
+- [ ] Step 4: Fetch and parse the target template structure  (per template in set mode)
+- [ ] Step 5: Map each source block to a target section      (per template in set mode)
 - [ ] Step 6: Add a source-URL footnote to every mapped block
 - [ ] Step 7: Mark empty target sections as "content missing"
 - [ ] Step 8: Build the "Discrepancies" section from excess content
 - [ ] Step 9: Append the coverage footnote (missing% + excess%)
 - [ ] Step 10: Publish or preview at the destination
 - [ ] Step 11: Tag the destination (labels / tags / metadata) when supported
+- [ ] Step 12: SET mode only — publish the overview/coverage page
 ```
+
+## Step 0 — Choose run mode
+
+Ask the operator **before** any other question:
+
+```
+"Run mode?"
+  - single        — one template → one document (default)
+  - set           — N templates → N documents + an overview/coverage page
+                    cross-referencing them
+```
+
+Defaults:
+
+- If the operator's request mentions a single doc kind ("write the runbook",
+  "fill the ADR template"), default to `single` and confirm.
+- If the operator's request implies covering a feature from several angles
+  ("document the X feature", "produce the full doc set for X", "functional
+  AND technical doc"), default to `set` and confirm.
+
+Set-mode rules carried through the rest of the workflow:
+
+- Step 1 asks for **N templates** (not one) and a per-template kind label.
+- Steps 3, 5–11 run **once per template** against the same Step 1 / Step 3
+  source set. Source fetching in Step 3 happens **once and is cached** —
+  re-fetching the same pages N times is wasteful and risks version drift.
+- Step 12 fires after the last per-template run completes.
+
+See [reference.md § Documentation set mode](reference.md#documentation-set-mode)
+for the AskQuestion block, the per-block tracking schema needed to compute
+redundancy, the aggregate-coverage and redundancy formulas, and the overview
+page template.
 
 ## Step 1 — Gather operator inputs
 
 Use the `AskQuestion` tool when available, otherwise ask conversationally.
-Always ask, even when context suggests an obvious answer:
+Always ask, even when context suggests an obvious answer.
+
+**Inputs gathered once for the whole run** (single AND set mode):
 
 1. **Source type** — default `Confluence`. Offer at least: `Confluence`,
    `Jira`, `Markdown / local files`, `PDF`, `Web URLs`, `Mixed`.
@@ -58,20 +108,33 @@ Always ask, even when context suggests an obvious answer:
    - a parent page ID (descendants will be pulled),
    - a CQL query (e.g. `space = ENG AND label = onboarding`),
    - a space key (use with care — can be huge).
-3. **Template** — a Confluence page ID OR a Confluence template inside a
-   space. The structure (heading tree) AND any example content under each
-   heading are both inputs to the mapper.
-4. **Destination** — either a new page (just the `parent page ID`; the title
+3. **Destination** — either new page(s) (just the `parent page ID`; the title
    is inferred in Step 10, not asked here) or an existing page to update.
-   Always confirm the destination space.
-5. **Doc kind** — `technical` or `functional`. Used as a label in Step 11.
-6. **Feature name** — short human name of the feature being documented.
+   Always confirm the destination space. In set mode, all N drafts AND the
+   overview page land under the same parent.
+4. **Feature name** — short human name of the feature being documented.
    Used as a label in Step 11 (slugified: lower-case, spaces → `-`,
    non-alphanumerics dropped, max 50 chars). If the operator's intent makes
    it unambiguous (e.g. "document the auth feature"), propose a default and
    ask them to confirm rather than asking from scratch.
 
-Record every answer back to the operator before doing any work.
+**Inputs gathered per document** (single mode: 1 entry; set mode: N entries):
+
+5. **Template** — a Confluence page ID OR a Confluence template inside a
+   space. The structure (heading tree) AND any example content under each
+   heading are both inputs to the mapper. In set mode, also help the
+   operator pick the templates: scan the destination space for pages
+   carrying a `template` label or matching `*template*` titles, and present
+   a list (Title · Page ID · top-level section preview).
+6. **Doc kind** — `technical` or `functional`. Used as a label in Step 11.
+   In set mode, ask once per template; default from the template title
+   (`functional documentation` → `functional`, `runbook|operations|design|
+   architecture|deployment|testing` → `technical`) and let the operator
+   override.
+
+Record every answer back to the operator before doing any work. In set mode,
+print the consolidated plan as a small table (`# · Template · Doc kind ·
+Inferred title`) and ask for one final confirmation before starting.
 
 ## Step 2 — Discover the Atlassian MCP server
 
@@ -221,7 +284,7 @@ See [reference.md](reference.md) for a full worked example.
 ## Step 10 — Publish
 
 **Title inference (new pages only).** Build the destination title from the
-template title captured in Step 4 and the feature name captured in Step 1.6:
+template title captured in Step 4 and the feature name captured in Step 1.4:
 
 ```
 destination_title = "<feature name> - <template title>"
@@ -253,8 +316,8 @@ Print the resulting page URL back to the operator before exiting.
 
 The destination MUST be tagged with three labels, in this order:
 
-1. `<feature-name-slug>` from Step 1.6 (e.g. `auth-token-refresh`).
-2. `technical` or `functional` from Step 1.5.
+1. `<feature-name-slug>` from Step 1.4 (e.g. `auth-token-refresh`).
+2. `technical` or `functional` from Step 1.6 (per template in set mode).
 3. `cursor` (constant — marks pages produced by this skill).
 
 **Only do this when the destination supports labels/tags/metadata.** Decide
@@ -281,7 +344,59 @@ nothing matches, take the fallback path and surface the limitation to the
 operator. See [reference.md](reference.md#tagging-the-destination) for full
 detection rules and per-destination guidance.
 
+In set mode, the overview page from Step 12 carries `overview` as its
+`doc kind` label instead of `technical` / `functional`.
+
+## Step 12 — SET MODE ONLY: publish the overview/coverage page
+
+After all N per-template runs complete, generate one additional page that
+indexes them and reports aggregate metrics across the set. Title:
+
+```
+overview_title = "<feature name> - Documentation overview & coverage"
+```
+
+The page MUST contain, in this order:
+
+1. **Purpose** — one paragraph explaining the page is the index + coverage
+   report for the N drafts produced for the feature, with a one-line
+   description of each template/draft.
+2. **The N drafts** — table with one row per draft: `# · Title · Page ID ·
+   Status · Open in Confluence` (link with `draftShareId` if drafts were
+   published as drafts), followed by a one-paragraph summary per draft.
+3. **Aggregate coverage** — total source chars; chars covered by the union
+   of the N drafts; chars not covered by any draft. Itemise the residual.
+4. **Redundancy across the drafts** — sum of per-draft footprints, unique
+   covered, duplicated; followed by pairwise + (if N ≥ 3) triple-overlap
+   table identifying which sections / topics duplicate which.
+5. **Per-source-page perspective** — one row per source page: coverage % +
+   which pair of drafts duplicates the most.
+6. **Per-template comparison** — sections / Excess% / what each absorbs / what
+   each discards.
+7. **Reading the numbers** — short interpretation block (which overlaps are
+   healthy redundancy vs. collapsible duplication).
+8. **Caveats** — note that numbers are directional (mapper estimates, not a
+   re-fetch + character-diff), and the label-fallback note if labels were
+   not applied natively.
+9. **Recommended follow-ups** — apply native labels, promote drafts to
+   `current` in dependency order so cross-links resolve, replace placeholder
+   sibling links inside each draft, collapse the largest pairwise overlap
+   with `see <other doc> §x.y` cross-references.
+
+Compute aggregate coverage and inter-draft redundancy with the formulas in
+[reference.md § Documentation set mode](reference.md#documentation-set-mode);
+they require keeping a `placements` map per source block during Steps 5-9 of
+each per-template run.
+
+Tag the overview page with `<feature-slug>`, `overview`, `cursor` (Step 11
+applies — including the fallback path if no label tool is available).
+
+Print, at the very end, the URLs of all N + 1 published pages back to the
+operator.
+
 ## Additional resources
 
 - [reference.md](reference.md) — Atlassian MCP tool index, Confluence storage
-  format notes, AskQuestion templates, and a fully worked metrics example.
+  format notes, AskQuestion templates, a fully worked metrics example, and
+  the full Documentation set mode reference (formulas, overview-page
+  template, worked example).

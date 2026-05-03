@@ -28,7 +28,20 @@ project-specific.
 
 ## AskQuestion templates
 
-Step 1 can be driven by five AskQuestion blocks:
+Step 0 (mode selection) is one block, asked first:
+
+```
+0. "Run mode?"
+   - single  — one template → one document (default)
+   - set     — N templates → N documents + an overview/coverage page
+               cross-referencing them
+```
+
+Default to `single` if the operator's request mentions a specific doc kind;
+default to `set` if they ask to "document the feature" / "produce the doc
+set" / mention several angles. Always confirm the inferred default.
+
+Step 1 is then driven by these blocks (5 in single mode, 6 in set mode):
 
 ```
 1. "What is the source of the documentation to map?"
@@ -44,21 +57,44 @@ Step 1 can be driven by five AskQuestion blocks:
    - A CQL query
    - A whole space (warn the operator about volume)
 
-3. "Where should the new document land?"
-   - New page under <parent page ID>  (title will be inferred in Step 10
-     from "<feature name> - <template title>" and confirmed before publish)
-   - Update existing page <page ID>   (title left untouched)
+3. "Where should the new document(s) land?"
+   - New page(s) under <parent page ID>  (title will be inferred in Step 10
+     from "<feature name> - <template title>" and confirmed before publish;
+     in set mode all N drafts AND the overview page land under the same
+     parent)
+   - Update existing page <page ID>   (single mode only; title left untouched)
 
-4. "Is this a technical or functional document?"
-   - technical
-   - functional
-
-5. "What is the feature name?" (free text; propose a default if you can
+4. "What is the feature name?" (free text; propose a default if you can
    infer it from the chat — e.g. operator said "document the auth refresh
    flow" → propose "auth refresh flow")
+
+5. "Pick the template(s)." (one in single mode, ≥1 in set mode)
+   In set mode, first scan the destination space for pages with a
+   `template` label (CQL: `space = <KEY> AND label = "template"`) or
+   matching `*template*`/`{Name of the feature}*` titles, present them as
+   "Title · Page ID · top-level sections (preview)", and let the operator
+   multi-select.
+
+6. "Doc kind for each template?" (asked once in single mode, once per
+   template in set mode)
+   - technical
+   - functional
+   Default per template title:
+     - contains "functional"                     → functional
+     - contains "runbook"|"operations"|"design"|
+       "architecture"|"deployment"|"testing"     → technical
+   Always offer the default and let the operator override.
 ```
 
 Always echo the operator's choices back before running anything destructive.
+In set mode, confirm the consolidated plan as a small table:
+
+```
+# · Template title                         · Page ID    · Doc kind  · Inferred title
+1 · {Name of the feature} - Functional…    · 66947548021 · functional · Auth refresh - Functional documentation
+2 · {Name of the feature} - Solution / D…  · 66948498160 · technical  · Auth refresh - Solution / Design
+3 · {Name of the feature} - Runbook / Op…  · 66948596304 · technical  · Auth refresh - Runbook / Operations
+```
 
 ### Title inference rule (Step 10)
 
@@ -222,3 +258,233 @@ The skill is designed Confluence-first but the mapping core is source-agnostic.
 For Markdown / PDF / web sources, replace Step 3 with the appropriate fetcher
 and keep the same block schema (`source_url`, `source_heading`, `char_count`,
 `raw`). Steps 4–10 remain unchanged.
+
+## Documentation set mode
+
+Set mode is the multi-template specialisation chosen in Step 0. It runs the
+single-doc workflow N times against the same source set, then publishes one
+extra page (Step 12 of SKILL.md) that indexes the N drafts and reports
+aggregate metrics across the whole set.
+
+### Per-block tracking schema
+
+To compute redundancy in Step 12, each per-template run (Steps 5–9) MUST
+update a shared `placements` map keyed by source-block id:
+
+```
+placements: {
+  <block_id>: {
+    "char_count":    <int>,                  # from Step 3
+    "source_url":    "...",
+    "drafts":        [                       # one entry per draft that placed
+                                             # this block (excluding excess
+                                             # placements in Discrepancies)
+      { "draft_idx": <0..N-1>,
+        "section":   "<target heading>",
+        "kind":      "retained" | "excess" }
+    ]
+  }
+}
+```
+
+Excess placements (blocks that landed in a `Discrepancies` section in some
+draft) DO count toward that draft's footprint but DO NOT count toward "covered
+by that draft" — they are covered only if some other draft placed them as
+retained content. Mark them with `kind: "excess"` to keep the bookkeeping
+clean.
+
+Define:
+
+- `is_covered_by(block, draft_idx)` ⇔ block has at least one entry with
+  `draft_idx == draft_idx` and `kind == "retained"`.
+- `appearances(block)` = number of drafts where `is_covered_by(block, *)` is
+  true.
+
+### Aggregate coverage formula (union)
+
+```
+total_chars            = sum(block.char_count for block in source_set)
+unique_covered_chars   = sum(block.char_count for block in source_set
+                             if appearances(block) >= 1)
+not_covered_chars      = total_chars - unique_covered_chars
+
+aggregate_coverage_pct = unique_covered_chars / total_chars * 100
+not_covered_pct        = 100 - aggregate_coverage_pct
+```
+
+Also itemise `not_covered_chars` by source page so the operator sees what
+the residual is (typically navigation scaffolding, decorative content, open
+TODOs, comment metadata). This is what landed in §3 (Aggregate coverage) of
+the overview page.
+
+### Redundancy formulas
+
+```
+per_draft_footprint(d)   = sum(block.char_count for block in source_set
+                               if is_covered_by(block, d))
+sum_appearances          = sum(per_draft_footprint(d) for d in 0..N-1)
+duplicated_chars         = sum_appearances - unique_covered_chars
+
+redundancy_pct           = duplicated_chars / sum_appearances * 100
+average_appearance_ratio = sum_appearances / unique_covered_chars
+```
+
+Pairwise overlap (for any pair of drafts `(a, b)`):
+
+```
+pairwise_overlap(a, b)   = sum(block.char_count for block in source_set
+                               if is_covered_by(block, a)
+                               and is_covered_by(block, b))
+```
+
+Triple overlap (only if N ≥ 3):
+
+```
+triple_overlap(a, b, c)  = sum(block.char_count for block in source_set
+                               if is_covered_by(block, a)
+                               and is_covered_by(block, b)
+                               and is_covered_by(block, c))
+```
+
+For each non-trivial pairwise overlap (say > 5% of `sum_appearances`),
+group the contributing blocks by `section` to label what is duplicated
+(e.g. "Build procedure (D2 §7.2 vs D3 §4.1)"). This is what populates the
+"Where the redundancy lives" table on the overview page.
+
+### Per-source-page coverage
+
+For each source page `p`, compute:
+
+```
+page_coverage_pct(p)     = sum(block.char_count for block in p
+                               if appearances(block) >= 1)
+                           / sum(block.char_count for block in p)
+                           * 100
+
+most_duplicated_pair(p)  = argmax_{(a,b)} sum(block.char_count for block in p
+                                              if is_covered_by(block, a)
+                                              and is_covered_by(block, b))
+```
+
+This populates the "Per-source-page perspective" table on the overview page.
+
+### Overview page template
+
+Render the page in storage format (or markdown — the publish tool converts).
+Section structure exactly as Step 12 of SKILL.md mandates:
+
+```
+> Labels: <feature-slug> · overview · cursor          # if label fallback used
+
+## Purpose
+<one paragraph: the page is the index + coverage report for the N drafts
+ produced for <feature> by the documentation-mapper skill against <source
+ description>.>
+- Draft 1 — <one-line purpose>
+- Draft 2 — <one-line purpose>
+- ...
+
+## The N drafts
+| # | Draft title | Page ID | Status | Open in Confluence |
+|---|---|---|---|---|
+| 1 | <title 1> | <id 1> | draft / current | <link with ?draftShareId=… if draft> |
+| ...                                                                            |
+
+### One-paragraph summary per draft
+<3 paragraphs (one per draft) — sections in the template, what each absorbs,
+ what each discards, headline metric (Excess%).>
+
+## Aggregate coverage (union of the N drafts vs. source)
+| Bucket | Chars | % of source |
+|---|---|---|
+| Covered by ≥1 draft | <unique_covered_chars> | <aggregate_coverage_pct>% |
+| Not covered by any draft | <not_covered_chars> | <not_covered_pct>% |
+
+What is in the residual <not_covered_pct>%:
+- <itemise per source-page leftovers>
+
+## Redundancy across the drafts
+| Draft | Source chars used (≈) |
+|---|---|
+| <Draft 1> | <per_draft_footprint(0)> |
+| <Draft 2> | <per_draft_footprint(1)> |
+| ... | ... |
+| Sum of per-draft appearances | <sum_appearances> |
+| Unique source content covered (union) | <unique_covered_chars> |
+| Duplicated content (sum − union) | <duplicated_chars> |
+
+So about <redundancy_pct>% of the combined content footprint across the N
+drafts is redundant. Equivalently every covered piece of source content
+appears <average_appearance_ratio>× on average.
+
+### Where the redundancy lives (pairwise + triple)
+| Overlap | ≈ chars | What's duplicated |
+|---|---|---|
+| D_a ∩ D_b | <pairwise_overlap(a,b)> | <grouped section labels> |
+| ...                                                                       |
+| All N    | <triple_overlap(...)>   | <grouped section labels>           |
+
+### Per-source-page perspective
+| Source page | Coverage | Most duplicated across drafts? |
+|---|---|---|
+| <link to source page> | <page_coverage_pct(p)>% | <most_duplicated_pair(p)> |
+| ...                                                                       |
+
+## Per-template comparison (same source, N templates)
+| Template | Sections | Excess% (single-doc view) | Absorbs | Discards |
+|---|---|---|---|---|
+| <Template 1> | <n_sections> | <excess%> | <one phrase> | <one phrase> |
+| ...                                                                       |
+
+## Reading the numbers
+- <interpret which overlaps are healthy vs collapsible>
+- <call out any near-disjoint pair (good news: combining adds no redundancy)>
+- <call out the residual not-covered share>
+
+## Caveats
+- Numbers come from the placements map kept during the per-template runs,
+  not from a re-fetch + character-diff of the published pages. Treat
+  slice-level numbers as directional (±20%); totals are internally
+  consistent because they sum back to per-draft Excess%.
+- <label-fallback note if labels could not be applied natively>
+
+## Recommended follow-ups
+1. Apply native labels on all N+1 pages.
+2. Promote drafts to `current` in dependency order so cross-links resolve
+   (typically: the doc receiving the most cross-references first, then its
+   referrers, then this overview page).
+3. Replace placeholder sibling links in §1 / §2 / Links sections of each
+   draft with real page links among the set.
+4. Collapse the largest pairwise overlap with `see <other doc> §x.y` cross-
+   references (estimated reduction: <X> chars, dropping aggregate
+   redundancy from <redundancy_pct>% to <projected>%).
+```
+
+### Worked example — Linked Audience US (3-template set)
+
+A real run of set mode against `Linked Audience US` (10 HOV source pages +
+1 inline-comment thread, ~61,500 chars) using OVSD's three feature
+templates produced:
+
+| Draft | Sections | Excess% (single-doc view) | Footprint (≈ chars) |
+|---|---|---|---|
+| Linked Audience US - Functional documentation | 8 | ~58% | ~17,000 |
+| Linked Audience US - Solution / Design | 11 | ~20% | ~45,000 |
+| Linked Audience US - Runbook / Operations | 7 | ~59% | ~18,000 |
+| **Sum of per-draft appearances** | | | **~80,000** |
+| **Unique source content covered (union)** | | | **~57,800** |
+| **Duplicated content (sum − union)** | | | **~22,200** |
+
+→ **Aggregate coverage ≈ 94%** (57,800 / 61,500) and
+**redundancy ≈ 28%** (22,200 / 80,000), with the largest pairwise overlap
+(Solution/Design ∩ Runbook ≈ 18,500 chars) carrying ~83% of all
+duplication. The four published pages live in OVSD under the
+`PoC LLM agent` folder (`66947547990`):
+
+- `66948596394` — Functional documentation (draft)
+- `66947548074` — Solution / Design (draft)
+- `66947581010` — Runbook / Operations (draft)
+- `66948498208` — Documentation overview & coverage (draft, the Step-12
+  product of this same set-mode run)
+
+Use it as the canonical reference when verifying set-mode output.
