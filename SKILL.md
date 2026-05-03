@@ -13,15 +13,18 @@ description: >-
   or rewrite documentation into a Confluence template, mentions
   "documentation mapper", "doc mapping", "fill a Confluence template from
   existing docs", or wants a Confluence-to-Confluence proof of concept of
-  template-driven documentation.
+  template-driven documentation. When the destination supports
+  labels/tags/metadata, also tags the published page with the feature name,
+  either "technical" or "functional" (the kind of doc the operator asked
+  for), and "cursor".
 ---
 
 # Documentation Mapper
 
 Maps documentation from arbitrary sources into a target template, footnotes
-every block with its source URL, and quantifies what got lost (empty target
+every block with its source URL, quantifies what got lost (empty target
 sections) and what got rerouted (source content that did not fit anywhere in
-the template).
+the template), and tags the destination so it can be found again.
 
 The default proof of concept is **Confluence → Confluence**.
 
@@ -40,6 +43,7 @@ Copy this checklist and update it as you go:
 - [ ] Step 8: Build the "Discrepancies" section from excess content
 - [ ] Step 9: Append the coverage footnote (missing% + excess%)
 - [ ] Step 10: Publish or preview at the destination
+- [ ] Step 11: Tag the destination (labels / tags / metadata) when supported
 ```
 
 ## Step 1 — Gather operator inputs
@@ -59,6 +63,12 @@ Always ask, even when context suggests an obvious answer:
    heading are both inputs to the mapper.
 4. **Destination** — either a new page (`parent page ID` + `title`) or an
    existing page to update. Always confirm the destination space.
+5. **Doc kind** — `technical` or `functional`. Used as a label in Step 11.
+6. **Feature name** — short human name of the feature being documented.
+   Used as a label in Step 11 (slugified: lower-case, spaces → `-`,
+   non-alphanumerics dropped, max 50 chars). If the operator's intent makes
+   it unambiguous (e.g. "document the auth feature"), propose a default and
+   ask them to confirm rather than asking from scratch.
 
 Record every answer back to the operator before doing any work.
 
@@ -213,6 +223,38 @@ See [reference.md](reference.md) for a full worked example.
 - Existing page → `updateConfluencePage`.
 
 Print the resulting page URL back to the operator before exiting.
+
+## Step 11 — Tag the destination
+
+The destination MUST be tagged with three labels, in this order:
+
+1. `<feature-name-slug>` from Step 1.6 (e.g. `auth-token-refresh`).
+2. `technical` or `functional` from Step 1.5.
+3. `cursor` (constant — marks pages produced by this skill).
+
+**Only do this when the destination supports labels/tags/metadata.** Decide
+support, in this order:
+
+1. The destination's MCP exposes a label-management tool (e.g.
+   `addConfluenceLabel`, `addLabelsToConfluencePage`, `setPageLabels`,
+   anything matching `*Label*`). Use it.
+2. The publish tool itself accepts a `labels` argument. Pass them there.
+3. Neither is available → **fallback**: prepend a small visible line to the
+   page body so the labels are at least textually searchable, AND tell the
+   operator labels could not be applied as native metadata. Example body
+   prefix:
+
+   ```html
+   <p><em>Labels:</em> <code>auth-token-refresh</code> &middot;
+   <code>technical</code> &middot; <code>cursor</code></p>
+   ```
+
+For Confluence specifically, the project's currently-discovered MCP tools
+do **not** expose label management — verify with
+`ls mcps/<server>/tools/ | findstr /I label` before assuming otherwise. If
+nothing matches, take the fallback path and surface the limitation to the
+operator. See [reference.md](reference.md#tagging-the-destination) for full
+detection rules and per-destination guidance.
 
 ## Additional resources
 

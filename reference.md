@@ -28,7 +28,7 @@ project-specific.
 
 ## AskQuestion templates
 
-Step 1 can be driven by three AskQuestion blocks:
+Step 1 can be driven by five AskQuestion blocks:
 
 ```
 1. "What is the source of the documentation to map?"
@@ -47,6 +47,14 @@ Step 1 can be driven by three AskQuestion blocks:
 3. "Where should the new document land?"
    - New page under <parent page ID>
    - Update existing page <page ID>
+
+4. "Is this a technical or functional document?"
+   - technical
+   - functional
+
+5. "What is the feature name?" (free text; propose a default if you can
+   infer it from the chat — e.g. operator said "document the auth refresh
+   flow" → propose "auth refresh flow")
 ```
 
 Always echo the operator's choices back before running anything destructive.
@@ -114,6 +122,68 @@ Excess
 The arithmetic checks out: `6 000 / (6 000 + 3 000) = 0.6666… ≈ 66 %`, which
 matches the operator's stated example ("twice as much unidentifiable data as
 the final volume → 66 %").
+
+## Tagging the destination
+
+Step 11 of SKILL.md mandates three labels on the destination, in this order:
+
+1. `<feature-name-slug>`
+2. `technical` or `functional`
+3. `cursor`
+
+### Slugifying the feature name
+
+```
+slug = feature_name.lower()
+slug = re.sub(r'[^a-z0-9]+', '-', slug).strip('-')
+slug = slug[:50]
+```
+
+Examples:
+- `"Auth Token Refresh"`        → `auth-token-refresh`
+- `"OAuth2 / PKCE flow"`        → `oauth2-pkce-flow`
+- `"Réécriture du moteur 2.0"`  → `r-criture-du-moteur-2-0` *(strip diacritics
+  first if you want a cleaner slug — optional, but be consistent)*
+
+### Detecting label support
+
+Run these checks in order; stop at the first that succeeds.
+
+1. **Dedicated tool.** Look in the discovered MCP for a tool whose name
+   matches `*Label*` (case-insensitive):
+
+   ```
+   ls mcps/<server>/tools/ | findstr /I label
+   ```
+
+   Likely names: `addConfluenceLabel`, `addLabelsToConfluencePage`,
+   `setConfluencePageLabels`. Read its descriptor before calling, then call
+   it once per label (or once with all three, depending on the schema).
+
+2. **Inline argument on the publish tool.** Re-read
+   `createConfluencePage.json` / `updateConfluencePage.json` and check for a
+   `labels`, `tags`, or `metadata` property. If present, pass the three
+   labels there and skip step 11's separate call.
+
+3. **Fallback (current state for the project's Atlassian MCP).** Neither
+   path is available. Then:
+
+   - Prepend a `<p><em>Labels:</em> ...</p>` line to the body so the labels
+     are at least full-text-searchable in Confluence.
+   - In the operator-facing summary printed at the end, add one line:
+     `Labels could not be applied as native Confluence metadata — emitted
+     as a visible body line instead.`
+   - Do NOT silently skip. The operator must know.
+
+### Per-destination guidance
+
+| Destination | How labels work |
+|-------------|-----------------|
+| Confluence (this project's MCP) | No label tool exposed → fallback path. |
+| Confluence (other projects' MCPs) | Re-run the detection above; tool names are not standardised. |
+| Jira issue | `editJiraIssue` accepts a `labels` field — pass the three labels there. |
+| Local Markdown file | Emit YAML frontmatter `labels: [feature-slug, technical, cursor]`. |
+| Generic web destination | No metadata channel → fallback path (visible labels line). |
 
 ## Edge cases
 
