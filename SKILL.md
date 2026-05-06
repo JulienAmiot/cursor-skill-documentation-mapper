@@ -37,10 +37,12 @@ The skill runs in one of two modes, picked upfront in Step 0:
 
 - **`single`** (default) — one source set, one template, one published doc.
   Steps 1 → 11 below.
-- **`set`** — one source set, N templates, N published docs PLUS an
-  overview/coverage page that cross-references them, reports aggregate union
-  coverage, and quantifies inter-draft redundancy. Steps 1 → 12 below;
-  Steps 3, 5–11 run once per template.
+- **`set`** — one source set, N templates, N published docs PLUS one
+  timestamped overview/coverage summary that cross-references them,
+  reports aggregate union coverage, and quantifies inter-draft redundancy.
+  The summary can be written locally (markdown) or published to Confluence
+  — the operator picks in Step 12.0. Steps 1 → 12 below; Steps 3, 5–11 run
+  once per template.
 
 ## Workflow
 
@@ -59,7 +61,8 @@ Copy this checklist and update it as you go:
 - [ ] Step 9: Append the coverage footnote (missing% + excess%)
 - [ ] Step 10: Publish or preview at the destination
 - [ ] Step 11: Tag the destination (labels / tags / metadata) when supported
-- [ ] Step 12: SET mode only — publish the overview/coverage page
+- [ ] Step 12: SET mode only — produce the timestamped overview/coverage summary
+        (ask: local markdown / Confluence / both)
 ```
 
 ## Step 0 — Choose run mode
@@ -247,7 +250,8 @@ it.
 ## Step 9 — Coverage footnote
 
 Append a final footnote at the very end of the document, titled
-`Mapping coverage`. It MUST contain BOTH metrics, computed as follows.
+`Mapping coverage`. It MUST be **concise** (no narrative, just the numbers
+and the offending items) and MUST contain BOTH metrics, computed as follows.
 
 **Missing% (section-count basis)**
 
@@ -347,52 +351,89 @@ detection rules and per-destination guidance.
 In set mode, the overview page from Step 12 carries `overview` as its
 `doc kind` label instead of `technical` / `functional`.
 
-## Step 12 — SET MODE ONLY: publish the overview/coverage page
+## Step 12 — SET MODE ONLY: publish the timestamped overview/coverage summary
 
-After all N per-template runs complete, generate one additional page that
-indexes them and reports aggregate metrics across the set. Title:
+After all N per-template runs complete, generate **one additional concise,
+timestamped summary** that indexes the N drafts and reports aggregate
+metrics across the set.
+
+### 12.0 — Ask where the summary lands
+
+Before producing anything, ask the operator (use `AskQuestion` when
+available):
 
 ```
-overview_title = "<feature name> - Documentation overview & coverage"
+"Where should the timestamped summary land?"
+  - Local markdown file (default)
+    → ask for an absolute path; default to
+      <repo-root>/scratch/<feature-slug>-overview-<UTC timestamp>.md
+  - Confluence page
+    → publish under the same parent as the N drafts (Step 1.3)
+  - Both
 ```
 
-The page MUST contain, in this order:
+The summary is the **same content** in either destination, only the
+rendering differs (markdown for local, storage format for Confluence).
 
-1. **Purpose** — one paragraph explaining the page is the index + coverage
-   report for the N drafts produced for the feature, with a one-line
-   description of each template/draft.
-2. **The N drafts** — table with one row per draft: `# · Title · Page ID ·
-   Status · Open in Confluence` (link with `draftShareId` if drafts were
-   published as drafts), followed by a one-paragraph summary per draft.
-3. **Aggregate coverage** — total source chars; chars covered by the union
-   of the N drafts; chars not covered by any draft. Itemise the residual.
-4. **Redundancy across the drafts** — sum of per-draft footprints, unique
-   covered, duplicated; followed by pairwise + (if N ≥ 3) triple-overlap
-   table identifying which sections / topics duplicate which.
-5. **Per-source-page perspective** — one row per source page: coverage % +
-   which pair of drafts duplicates the most.
-6. **Per-template comparison** — sections / Excess% / what each absorbs / what
-   each discards.
-7. **Reading the numbers** — short interpretation block (which overlaps are
-   healthy redundancy vs. collapsible duplication).
-8. **Caveats** — note that numbers are directional (mapper estimates, not a
-   re-fetch + character-diff), and the label-fallback note if labels were
-   not applied natively.
-9. **Recommended follow-ups** — apply native labels, promote drafts to
-   `current` in dependency order so cross-links resolve, replace placeholder
-   sibling links inside each draft, collapse the largest pairwise overlap
-   with `see <other doc> §x.y` cross-references.
+### 12.1 — Title and timestamp
+
+Capture a single UTC timestamp at the start of Step 12 and reuse it
+everywhere (filename, page title, header).
+
+```
+timestamp_utc    = "<YYYY-MM-DD HH:MM UTC>"
+overview_title   = "<feature name> - Documentation overview & coverage (<timestamp_utc>)"
+```
+
+### 12.2 — Required content (concise, in this order)
+
+The summary MUST stay **concise** — terse tables, short bullets, no
+narrative padding. Same outline whether it lands locally or in Confluence:
+
+1. **Header** — feature name, timestamp, source description, run mode.
+2. **The N drafts** — one-row-per-draft table:
+   `# · Template · Doc kind · Title · Page ID · Status · URL ·
+   Missing% · Excess%`. Optional one-line summary per draft (skip when
+   the table already speaks for itself).
+3. **Aggregate coverage (union vs. source)** — `total_chars`,
+   `unique_covered_chars`, `not_covered_chars`, `aggregate_coverage_pct`,
+   `not_covered_pct`. One short bullet list itemising the residual by
+   source page.
+4. **Redundancy across the drafts** — `sum_appearances`,
+   `unique_covered_chars`, `duplicated_chars`, `redundancy_pct`,
+   `average_appearance_ratio`. Pairwise overlap table (and triple overlap
+   if N ≥ 3) with one phrase labelling what duplicates.
+5. **Per-source-page perspective** — coverage% + most-duplicated pair per
+   source page (one row each).
+6. **Per-template comparison** — `Template · Sections · Missing% ·
+   Excess% · Absorbs · Discards` (one phrase per cell).
+7. **Reading the numbers** — 2–3 bullets max (healthy vs. collapsible
+   redundancy, residual share).
+8. **Caveats** — one bullet: numbers are directional (placements map, not
+   re-fetch + diff). Add the label-fallback note if it applies.
+9. **Follow-ups** — 3–5 bullets max (apply native labels, promote drafts
+   to `current` in dependency order, collapse the largest pairwise
+   overlap, etc.).
 
 Compute aggregate coverage and inter-draft redundancy with the formulas in
 [reference.md § Documentation set mode](reference.md#documentation-set-mode);
 they require keeping a `placements` map per source block during Steps 5-9 of
 each per-template run.
 
-Tag the overview page with `<feature-slug>`, `overview`, `cursor` (Step 11
-applies — including the fallback path if no label tool is available).
+### 12.3 — Render and persist
 
-Print, at the very end, the URLs of all N + 1 published pages back to the
-operator.
+- **Local markdown** — write to the chosen path. If the file already
+  exists, never overwrite — the timestamp suffix should already make
+  collisions impossible; if one happens, append `-2`, `-3`, … and tell
+  the operator. Print the absolute path back at the end.
+- **Confluence page** — publish via `createConfluencePage` under the
+  Step 1.3 parent and tag it with `<feature-slug>`, `overview`, `cursor`
+  (Step 11 applies, including the fallback path).
+- **Both** — produce the local file first (cheap, lets the operator
+  preview), then publish the Confluence page from the same content.
+
+Print, at the very end, the destination(s) of the summary AND the URLs of
+all N drafts back to the operator.
 
 ## Additional resources
 

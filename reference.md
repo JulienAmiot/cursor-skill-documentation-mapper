@@ -86,6 +86,17 @@ Step 1 is then driven by these blocks (5 in single mode, 6 in set mode):
    Always offer the default and let the operator override.
 ```
 
+Set mode adds one final block at the start of Step 12:
+
+```
+7. "Where should the timestamped overview/coverage summary land?"
+   - Local markdown file (default)
+       → ask for an absolute path; default to
+         <repo-root>/scratch/<feature-slug>-overview-<UTC timestamp>.md
+   - Confluence page (under the same parent as the N drafts)
+   - Both
+```
+
 Always echo the operator's choices back before running anything destructive.
 In set mode, confirm the consolidated plan as a small table:
 
@@ -368,96 +379,84 @@ most_duplicated_pair(p)  = argmax_{(a,b)} sum(block.char_count for block in p
 
 This populates the "Per-source-page perspective" table on the overview page.
 
-### Overview page template
+### Overview / coverage summary template
 
-Render the page in storage format (or markdown — the publish tool converts).
-Section structure exactly as Step 12 of SKILL.md mandates:
+The same outline is produced in two flavours depending on Step 12.0:
+
+- **Markdown** — written to a local file. Use the block below verbatim.
+- **Confluence storage format** — the publish tool converts markdown
+  cleanly; the structure is identical, only the wrapper differs.
+
+Keep it **concise**: terse tables, short bullets, no narrative padding.
 
 ```
+# <feature name> - Documentation overview & coverage
+_Generated <YYYY-MM-DD HH:MM UTC> by `documentation-mapper` (mode: set)._
+
+Source: <one line — N pages / CQL / space, ≈ <total_chars> chars>.
 > Labels: <feature-slug> · overview · cursor          # if label fallback used
 
-## Purpose
-<one paragraph: the page is the index + coverage report for the N drafts
- produced for <feature> by the documentation-mapper skill against <source
- description>.>
-- Draft 1 — <one-line purpose>
-- Draft 2 — <one-line purpose>
-- ...
-
 ## The N drafts
-| # | Draft title | Page ID | Status | Open in Confluence |
-|---|---|---|---|---|
-| 1 | <title 1> | <id 1> | draft / current | <link with ?draftShareId=… if draft> |
-| ...                                                                            |
+| # | Template          | Doc kind   | Title       | Page ID | Status        | URL | Missing% | Excess% |
+|---|-------------------|------------|-------------|---------|---------------|-----|----------|---------|
+| 1 | <template title>  | functional | <title 1>   | <id 1>  | draft/current | <link with ?draftShareId=… if draft> | <m1>% | <e1>% |
+| ...                                                                                                       |
 
-### One-paragraph summary per draft
-<3 paragraphs (one per draft) — sections in the template, what each absorbs,
- what each discards, headline metric (Excess%).>
+(Optional: one-line summary per draft — skip if the table already says it.)
 
 ## Aggregate coverage (union of the N drafts vs. source)
 | Bucket | Chars | % of source |
 |---|---|---|
-| Covered by ≥1 draft | <unique_covered_chars> | <aggregate_coverage_pct>% |
-| Not covered by any draft | <not_covered_chars> | <not_covered_pct>% |
+| Covered by ≥1 draft       | <unique_covered_chars> | <aggregate_coverage_pct>% |
+| Not covered by any draft  | <not_covered_chars>    | <not_covered_pct>%        |
 
-What is in the residual <not_covered_pct>%:
-- <itemise per source-page leftovers>
+Residual breakdown (one bullet per source page).
 
 ## Redundancy across the drafts
-| Draft | Source chars used (≈) |
-|---|---|
-| <Draft 1> | <per_draft_footprint(0)> |
-| <Draft 2> | <per_draft_footprint(1)> |
-| ... | ... |
-| Sum of per-draft appearances | <sum_appearances> |
-| Unique source content covered (union) | <unique_covered_chars> |
-| Duplicated content (sum − union) | <duplicated_chars> |
+| Draft                                  | Source chars used (≈) |
+|----------------------------------------|-----------------------|
+| <Draft 1>                              | <per_draft_footprint(0)> |
+| ...                                    | ... |
+| Sum of per-draft appearances           | <sum_appearances> |
+| Unique source content covered (union)  | <unique_covered_chars> |
+| Duplicated content (sum − union)       | <duplicated_chars> |
 
-So about <redundancy_pct>% of the combined content footprint across the N
-drafts is redundant. Equivalently every covered piece of source content
-appears <average_appearance_ratio>× on average.
+About <redundancy_pct>% of the combined footprint is redundant
+(<average_appearance_ratio>× on average).
 
 ### Where the redundancy lives (pairwise + triple)
-| Overlap | ≈ chars | What's duplicated |
-|---|---|---|
-| D_a ∩ D_b | <pairwise_overlap(a,b)> | <grouped section labels> |
-| ...                                                                       |
-| All N    | <triple_overlap(...)>   | <grouped section labels>           |
+| Overlap   | ≈ chars                 | What's duplicated         |
+|-----------|-------------------------|---------------------------|
+| D_a ∩ D_b | <pairwise_overlap(a,b)> | <grouped section labels>  |
+| ...                                                             |
+| All N     | <triple_overlap(...)>   | <grouped section labels>  |
 
-### Per-source-page perspective
-| Source page | Coverage | Most duplicated across drafts? |
-|---|---|---|
-| <link to source page> | <page_coverage_pct(p)>% | <most_duplicated_pair(p)> |
-| ...                                                                       |
+## Per-source-page perspective
+| Source page          | Coverage              | Most duplicated across drafts? |
+|----------------------|-----------------------|--------------------------------|
+| <link to source page>| <page_coverage_pct(p)>%| <most_duplicated_pair(p)>     |
+| ...                                                                             |
 
-## Per-template comparison (same source, N templates)
-| Template | Sections | Excess% (single-doc view) | Absorbs | Discards |
-|---|---|---|---|---|
-| <Template 1> | <n_sections> | <excess%> | <one phrase> | <one phrase> |
-| ...                                                                       |
+## Per-template comparison
+| Template     | Sections     | Missing% | Excess% | Absorbs     | Discards    |
+|--------------|--------------|----------|---------|-------------|-------------|
+| <Template 1> | <n_sections> | <m1>%    | <e1>%   | <one phrase>| <one phrase>|
+| ...                                                                              |
 
 ## Reading the numbers
-- <interpret which overlaps are healthy vs collapsible>
-- <call out any near-disjoint pair (good news: combining adds no redundancy)>
-- <call out the residual not-covered share>
+- <which overlaps are healthy vs. collapsible>
+- <call out any near-disjoint pair / outsized residual>
 
 ## Caveats
-- Numbers come from the placements map kept during the per-template runs,
-  not from a re-fetch + character-diff of the published pages. Treat
-  slice-level numbers as directional (±20%); totals are internally
-  consistent because they sum back to per-draft Excess%.
+- Directional numbers (placements map, not a re-fetch + diff).
 - <label-fallback note if labels could not be applied natively>
 
-## Recommended follow-ups
-1. Apply native labels on all N+1 pages.
-2. Promote drafts to `current` in dependency order so cross-links resolve
-   (typically: the doc receiving the most cross-references first, then its
-   referrers, then this overview page).
-3. Replace placeholder sibling links in §1 / §2 / Links sections of each
-   draft with real page links among the set.
-4. Collapse the largest pairwise overlap with `see <other doc> §x.y` cross-
-   references (estimated reduction: <X> chars, dropping aggregate
-   redundancy from <redundancy_pct>% to <projected>%).
+## Follow-ups
+1. Apply native labels on all pages.
+2. Promote drafts to `current` in dependency order so cross-links resolve.
+3. Replace placeholder sibling links between drafts with real page links.
+4. Collapse the largest pairwise overlap with `see <other doc> §x.y`
+   cross-references (≈ <X> chars saved → redundancy drops to <projected>%).
 ```
 
 ### Worked example — Linked Audience US (3-template set)
