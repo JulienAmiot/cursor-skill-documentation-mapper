@@ -20,7 +20,11 @@ description: >-
   fit — so the reference graph is strictly backward (later rank -> earlier
   rank) and acyclic; other drafts emit excerpt-include macros or plain
   backward smart links pointing at the owner rather than duplicating the
-  body, and parent drafts never reference children). Use when the user
+  body, and parent drafts never reference children; every backward
+  reference is a SECTION-ANCHOR DEEP LINK that targets the owner's
+  specific heading, never just the owner page URL, so the reader lands
+  on the canonical section header rather than at the top of the parent
+  page). Use when the user
   asks to map, migrate, consolidate,
   transcribe or rewrite documentation into a Confluence template, mentions
   "documentation mapper", "doc mapping", "fill a Confluence template from
@@ -431,6 +435,17 @@ Consequences of parent-priority that the operator should expect:
   ownership — if a child template has the **only** matching section for
   a block, the child still owns it (the parent simply has no fit). This
   is what keeps the child drafts from being purely empty.
+- **Owner headings must be reader-friendly** — every backward reference
+  emitted in Step 6 is a deep link to the owner's heading anchor (see
+  Step 6's "Deep-link to the owner section anchor" rule). If the owner
+  section heading carries template noise (e.g. a `(from _SourceName_)`
+  attribution suffix, raw markdown wrappers, decorative emojis), the
+  generated anchor becomes long and brittle. Render the owner heading
+  with the **clean human heading text only** — move source attributions
+  to a `_Source:_` footnote at the end of the owned section instead of
+  embedding them in the heading. This applies in both single and set
+  modes, but matters most in set mode because the heading text becomes
+  part of every child draft's reference URL.
 
 Update the shared `placements` map (per-block tracking schema in
 reference.md) as you go. Steps 6, 8, 9, and 12 all read from it.
@@ -469,12 +484,82 @@ acceptable:
    Confluence supports named excerpts. The owner wraps each owned
    section in a named `excerpt` macro (see snippet above); the child
    draft pulls it in with `excerpt-include`. Render is inline; the
-   reader sees the actual owner body in context.
+   reader sees the actual owner body in context. The macro is
+   implicitly section-scoped (it targets the named excerpt directly),
+   so no URL fragment is required.
 2. **Plain backward smart link** — fallback when named excerpts are not
    available, or when the operator prefers a shorter visual footprint.
    The child emits an `<ac:link>` (or a `<a data-card-appearance="inline">`
    smart-link tile, in the modern editor) pointing at the owner page
    and section. The reader clicks through instead of reading inline.
+
+### Deep-link to the owner section anchor (rule)
+
+Every backward reference, regardless of rendering option, MUST target
+the **specific owner section heading** on the owner page, **not** the
+owner page URL alone. The reader's click should land on the heading
+that owns the content, not at the top of the parent page where they
+have to scroll. This is the core navigation guarantee of set mode under
+parent-priority: the child draft is a curated reading view, and every
+link in it resolves to the canonical owner section.
+
+- **Option A (`excerpt-include`)** — the macro already names the
+  owner's excerpt, so it deep-links by construction. No URL fragment
+  needed.
+- **Option B (plain smart link / `<ac:link>`)** — the link target MUST
+  include a `#<heading-anchor>` URL fragment matching the rendered
+  heading on the owner page. A bare page URL is a **forbidden
+  shortcut** — it is a sign the renderer skipped the anchor lookup and
+  the reference must be regenerated.
+
+**Anchor convention** (Confluence Cloud auto-generated heading
+anchors). Given an owner section heading `H` as it is rendered on the
+published owner page (after stripping markdown formatting like `_…_`
+or `**…**`), the anchor `A` is built by:
+
+```
+A = H
+A = strip from A every char in: & / ? ( ) [ ] { } < > " ' ! , ; : | * ` em-dash
+A = collapse every whitespace run in A to a single "-"
+A = trim leading and trailing "-"
+# keep: letters, digits, "." , "_" , the dashes inserted above
+# case is preserved
+```
+
+Examples (applied to actual published headings):
+
+| Owner heading text                              | Anchor                                          |
+|-------------------------------------------------|-------------------------------------------------|
+| `1. INTRODUCTION`                               | `1.-INTRODUCTION`                               |
+| `7.2 Building a Linked Audience step-by-step`   | `7.2-Building-a-Linked-Audience-step-by-step`   |
+| `6.6 Key rotation strategy (EMEA)`              | `6.6-Key-rotation-strategy-EMEA`                |
+| `5.1 What is the Data Graph?`                   | `5.1-What-is-the-Data-Graph`                    |
+| `10. OPERATIONAL NOTES / HANDOVER`              | `10.-OPERATIONAL-NOTES-HANDOVER`                |
+
+The full URL of a smart-link reference is:
+
+```
+<owner_page_base_url>#<A>
+```
+
+where `<owner_page_base_url>` is the Confluence webui URL of the owner
+page (e.g. `https://<site>.atlassian.net/wiki/spaces/<SPACE>/pages/<ID>/<Title+Slug>`).
+
+**Anchor-vs-heading hygiene.** The anchor is brittle if the owner
+heading carries template noise — a parenthesised source attribution, a
+trailing `[draft]` marker, em-dashes, decorative emoji. Step 5's
+"Owner headings must be reader-friendly" consequence applies here:
+keep the owner heading **clean** (human-readable, no source-name
+suffix) and move attribution to a `_Source:_` line at the end of the
+section. This keeps every generated anchor short and predictable.
+
+**Verifying anchors.** Different Confluence Cloud sites occasionally
+diverge on edge cases (case folding, dot handling). After the first
+child draft is published, click one of its `§N.M` links. If it scrolls
+to the wrong section or to the page top, regenerate the affected
+references with the site's actual anchor format and re-publish. The
+overview page (Step 12) carries one bullet under "Caveats" documenting
+the convention used, so the operator knows what to verify.
 
 Because ownership is parent-priority (Step 5), references are strictly
 **backward** in the reading order — a child draft pointing at its
@@ -482,8 +567,9 @@ parent. Owners are therefore **always published before** the drafts that
 reference them (Step 10 publishes in reading-order rank), so the
 pointer always resolves at the moment the child page is created. Both
 title-based (`SPACE:<destination title>`) and id-based references work
-under this rule. The exact storage-format snippets for both options are
-in
+under this rule; both must still carry the `#<heading-anchor>`
+fragment described in the "Deep-link to the owner section anchor"
+rule above. The exact storage-format snippets for both options are in
 [reference.md § Set-mode de-duplication via reading-order references](reference.md#set-mode-de-duplication-via-reading-order-references).
 
 Forward references (parent → child) and prose-only pointers (the

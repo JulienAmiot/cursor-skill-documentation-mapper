@@ -669,14 +669,95 @@ section in any macro under this option.
 
 ```html
 <h2>{child_section}</h2>
-<p><em>This section is owned by <a href="{owner_page_url}"
-  data-card-appearance="inline">{owner destination title} §{owner_section}</a>.
-  Open the parent page for the full description.</em></p>
+<p><em>Owned by the parent page. Open the canonical section directly:
+  <a href="{owner_page_url}#{owner_section_anchor}"
+     data-card-appearance="inline">{owner destination title} §{owner_section}</a>.</em></p>
 ```
 
 In legacy storage format, swap `<a href="…" data-card-appearance="inline">`
-for the same `<ac:link>` element used in Option A's intro line, without
-the trailing `excerpt-include` macro.
+for `<ac:link ac:anchor="{owner_section_anchor}">` wrapping the same
+`<ri:page>` / `<ac:plain-text-link-body>` pair used in Option A's intro
+line, without the trailing `excerpt-include` macro.
+
+##### Deep-link rule (applies to both options)
+
+Every backward reference MUST resolve to the **owner section anchor**,
+not the owner page URL alone. The reader's click should land on the
+canonical heading, not at the top of the parent page where they have
+to scroll.
+
+- **Option A (`excerpt-include`)** — the macro names the owner's
+  excerpt explicitly via `<ac:parameter ac:name="name">{owner_excerpt}
+  </ac:parameter>`. That parameter is the deep link by construction;
+  no URL fragment is required.
+- **Option B (plain smart link)** — the `href` MUST include
+  `#{owner_section_anchor}`. A bare `href="{owner_page_url}"` (no
+  fragment) is a **forbidden shortcut**: it is a sign the renderer
+  skipped the anchor lookup and the reference must be regenerated.
+
+###### Anchor algorithm
+
+Given an owner section heading `H` as it is rendered on the published
+owner page (after stripping markdown formatting like `_…_` or `**…**`
+that the editor would not display in the final heading), the anchor
+`A = anchor_of(H)` is built by:
+
+```
+A = H
+A = strip from A every char in: & / ? ( ) [ ] { } < > " ' ! , ; : | * ` em-dash
+A = collapse every whitespace run in A to a single "-"
+A = trim leading and trailing "-"
+# keep: letters, digits, "." , "_" , the dashes inserted above
+# case is preserved (do NOT lowercase)
+```
+
+Examples:
+
+| Owner heading text                              | `anchor_of(H)`                                  |
+|-------------------------------------------------|-------------------------------------------------|
+| `1. INTRODUCTION`                               | `1.-INTRODUCTION`                               |
+| `7.2 Building a Linked Audience step-by-step`   | `7.2-Building-a-Linked-Audience-step-by-step`   |
+| `6.6 Key rotation strategy (EMEA)`              | `6.6-Key-rotation-strategy-EMEA`                |
+| `5.1 What is the Data Graph?`                   | `5.1-What-is-the-Data-Graph`                    |
+| `10. OPERATIONAL NOTES / HANDOVER`              | `10.-OPERATIONAL-NOTES-HANDOVER`                |
+
+###### Anchor-vs-heading hygiene (clean-heading rule)
+
+Anchors get long and brittle if the owner heading carries template
+noise. Render the owner heading with the **clean human heading text
+only**:
+
+- Drop `(from _SourceName_)` attribution suffixes, raw markdown
+  wrappers, decorative emojis, trailing `[draft]` markers.
+- Move all source attribution to a `_Source:_` line at the end of the
+  owned section (or to a section-end footnote when there are several
+  sources). The `_Source:_` line is what carries the `<a>`/`<ac:link>`
+  back to the original source URL; the heading itself stays clean.
+- This rule applies in single mode too — it costs nothing and makes
+  the owner page nicer to read. It is **mandatory** in set mode
+  because every child draft's reference URL embeds the heading's
+  anchor.
+
+###### Verifying anchors after the first publish
+
+Different Confluence Cloud sites occasionally diverge on edge cases
+(case folding, dot handling, em-dash treatment). After the first child
+draft is published, click one of its `§N.M` references. If it scrolls
+to the wrong section or to the page top:
+
+1. Open the owner page in the browser, right-click the target heading,
+   `Copy link` — Confluence pastes the exact URL with the site's
+   actual anchor format.
+2. Diff the pasted anchor against `anchor_of(H)` from the algorithm
+   above. Adjust the algorithm (e.g. lowercase, dot-handling) to match
+   the site.
+3. Regenerate every reference using the corrected algorithm and
+   re-publish the child drafts. Owners do not need to be re-published;
+   only the references change.
+
+Step 12's overview/coverage page documents the convention actually
+used in its Caveats bullet, so the operator can verify against the
+site once at run end rather than per-link.
 
 Why both options are safe under parent-priority — and why
 **title-based** and **id-based** references are interchangeable:
@@ -718,10 +799,15 @@ Decide at Step 2.2:
   same set of drafts. Pick one rendering and use it for every
   reference.
 
-For Option A, the `ac:anchor` (if you also include one for accessibility)
-is built from the owner section heading: lowercased, spaces → `-`,
-non-alphanumerics stripped, matching Confluence's auto-generated
-heading-anchor convention.
+For Option A, the `ac:anchor` (if you also include one for
+accessibility on the `<ac:link>` intro line) follows the same
+`anchor_of(H)` algorithm documented under the Deep-link rule above.
+Note that the historical formulation ("lowercased, spaces → `-`,
+non-alphanumerics stripped") understated Confluence Cloud's
+case-preserving behaviour on the modern editor and stripped the dots
+that Cloud actually keeps; the algorithm under the Deep-link rule
+section above is the corrected one and is what every reference in
+this skill must use.
 
 ### Per-block tracking schema
 

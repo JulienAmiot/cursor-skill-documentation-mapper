@@ -52,8 +52,16 @@ to expose their content as MCP tools.
    therefore strictly backward (later rank → earlier rank), acyclic,
    and contains zero parent → child references. Every other draft
    that wants the same block
-   emits a Confluence `excerpt-include` macro pointing at the owner
-   instead of copying the body. Excess blocks land in **one** draft's
+   emits a Confluence `excerpt-include` macro (or a plain smart link
+   as a portable fallback) pointing at the owner instead of copying
+   the body. **Every backward reference is a section-anchor deep
+   link** — it targets the owner's specific heading on the parent page,
+   never just the parent page URL, so the reader lands directly on the
+   canonical section instead of scrolling from the top. To keep those
+   anchors short and predictable, owner headings are rendered as
+   clean human text (no `(from _Source_)` attribution suffix) and
+   source attributions are moved to a `_Source:_` line at the end of
+   each owned section. Excess blocks land in **one** draft's
    `Discrepancies` section (the best-fit-but-below-threshold draft),
    never in multiple. The body of any given piece of information lives
    in exactly one place across the set.
